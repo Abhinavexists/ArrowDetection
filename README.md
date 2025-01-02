@@ -1,10 +1,10 @@
 # Arrow Detection with OpenCV
 
-This project captures real-time video from a webcam to detect arrow shapes using color-based HSV filtering and contour detection in OpenCV. Dynamic HSV thresholds can be adjusted using trackbars to refine the color range for detecting specific shapes in varying lighting conditions.
+This project captures real-time video from a webcam to detect arrow shapes using color-based HSV filtering and contour detection in OpenCV. Dynamic HSV thresholds can be adjusted using trackbars to refine the color range to detect specific shapes in varying lighting conditions.
 
 ## Features
 - **Real-Time Video Processing**: Continuously captures frames from the webcam and applies color-based shape detection.
-- **Adjustable HSV Thresholds**: Trackbars enable real-time adjustment of HSV color values for fine-tuning detection sensitivity.
+- **Adjustable HSV Thresholds**: Trackbars enable real-time HSV color-value adjustment for fine-tuning detection sensitivity.
 - **Shape Detection**: Uses contour approximation to identify arrow shapes, highlighting them by drawing bounding boxes and contours.
 
 ## Requirements
@@ -14,7 +14,7 @@ This project captures real-time video from a webcam to detect arrow shapes using
 
 1. Clone the repository:
     ```bash
-    git clone https://github.com/Abhinavks1405/ArrowDetection.git
+    git clone https://github.com/Abhinavexists/ArrowDetection.git
     cd ArrowDetection
     ```
 

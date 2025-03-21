@@ -1,6 +1,8 @@
 import numpy as np
 import cv2
 import threading
+import time
+from queue import Queue
 
 # Initialize webcam capture with reduced resolution and frame rate
 cap = cv2.VideoCapture(0)
@@ -14,72 +16,125 @@ def nothing(x):
 
 # Set up trackbars for dynamic HSV threshold adjustment
 cv2.namedWindow("Trackbars")
-cv2.createTrackbar("L-H", "Trackbars", 160, 179, nothing)
-cv2.createTrackbar("L-S", "Trackbars", 100, 255, nothing)
-cv2.createTrackbar("L-V", "Trackbars", 20, 255, nothing)
-cv2.createTrackbar("U-H", "Trackbars", 179, 179, nothing)
-cv2.createTrackbar("U-S", "Trackbars", 255, 255, nothing)
-cv2.createTrackbar("U-V", "Trackbars", 255, 255, nothing)
+cv2.moveWindow("Trackbars", 0, 0)  # Move window to top-left corner
+# Modified default values for better arrow detection
+cv2.createTrackbar("L-H", "Trackbars", 0, 179, nothing)    # Lower hue
+cv2.createTrackbar("L-S", "Trackbars", 50, 255, nothing)   # Lower saturation
+cv2.createTrackbar("L-V", "Trackbars", 50, 255, nothing)   # Lower value
+cv2.createTrackbar("U-H", "Trackbars", 179, 179, nothing)  # Upper hue
+cv2.createTrackbar("U-S", "Trackbars", 255, 255, nothing)  # Upper saturation
+cv2.createTrackbar("U-V", "Trackbars", 255, 255, nothing)  # Upper value
+
+# Create windows for debugging
+cv2.namedWindow("Mask")
+cv2.namedWindow("Frame")
+cv2.moveWindow("Mask", 650, 0)  # Position mask window next to the frame
+
+# Create a queue for frame processing
+frame_queue = Queue(maxsize=2)
+processed_queue = Queue(maxsize=2)
+running = True
 
 # Process frames in a separate thread
 def process_frame():
+    global running
+    while running:
+        if not frame_queue.empty():
+            frame = frame_queue.get()
+            
+            # Apply Gaussian Blur to smooth edges
+            blurred_frame = cv2.GaussianBlur(frame, (7, 7), 0)  # Increased blur kernel
+            imgHSV = cv2.cvtColor(blurred_frame, cv2.COLOR_BGR2HSV)
+            
+            # Get HSV values from trackbars
+            l_h = cv2.getTrackbarPos("L-H", "Trackbars")
+            l_s = cv2.getTrackbarPos("L-S", "Trackbars")
+            l_v = cv2.getTrackbarPos("L-V", "Trackbars")
+            u_h = cv2.getTrackbarPos("U-H", "Trackbars")
+            u_s = cv2.getTrackbarPos("U-S", "Trackbars")
+            u_v = cv2.getTrackbarPos("U-V", "Trackbars")
+            
+            # Define HSV range for mask
+            lower = np.array([l_h, l_s, l_v])
+            upper = np.array([u_h, u_s, u_v])
+            mask = cv2.inRange(imgHSV, lower, upper)
+            
+            # Apply morphological operations
+            kernel = np.ones((5, 5), np.uint8)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)  # Remove noise
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)  # Fill gaps
+            
+            # Detect contours
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # Draw all contours for debugging
+            contour_frame = frame.copy()
+            cv2.drawContours(contour_frame, contours, -1, (0, 255, 0), 1)
+            
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if area > 1000:  # Reduced minimum area
+                    perimeter = cv2.arcLength(cnt, True)
+                    approx = cv2.approxPolyDP(cnt, 0.02 * perimeter, True)  # Adjusted epsilon
+                    
+                    # Check if shape could be an arrow (between 5 and 8 corners)
+                    if 5 <= len(approx) <= 8:
+                        x, y, w, h = cv2.boundingRect(cnt)
+                        aspect_ratio = float(w)/h
+                        
+                        # Additional checks for arrow-like shapes
+                        if 0.5 <= aspect_ratio <= 2.0:  # Reasonable aspect ratio for arrows
+                            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                            cv2.drawContours(frame, [approx], -1, (0, 255, 0), 2)
+                            
+                            # Draw center point
+                            M = cv2.moments(cnt)
+                            if M["m00"] != 0:
+                                cx = int(M["m10"] / M["m00"])
+                                cy = int(M["m01"] / M["m00"])
+                                cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
+            
+            # Create a composite frame with both mask and processed frame
+            processed_data = {
+                'frame': frame,
+                'mask': mask
+            }
+            
+            # Put processed frame in the queue
+            if not processed_queue.full():
+                processed_queue.put(processed_data)
+        else:
+            time.sleep(0.01)  # Small delay to prevent busy waiting
+
+# Start processing thread
+process_thread = threading.Thread(target=process_frame)
+process_thread.start()
+
+# Main loop for capturing and displaying frames
+try:
     while True:
         ret, frame = cap.read()
         if not ret:
             break
-
-        # Apply Gaussian Blur to smooth edges
-        blurred_frame = cv2.GaussianBlur(frame, (5, 5), 0)
-        imgHSV = cv2.cvtColor(blurred_frame, cv2.COLOR_BGR2HSV)
+            
+        # Put frame in processing queue
+        if not frame_queue.full():
+            frame_queue.put(frame.copy())
         
-        # Get HSV values from trackbars
-        l_h = cv2.getTrackbarPos("L-H", "Trackbars")
-        l_s = cv2.getTrackbarPos("L-S", "Trackbars")
-        l_v = cv2.getTrackbarPos("L-V", "Trackbars")
-        u_h = cv2.getTrackbarPos("U-H", "Trackbars")
-        u_s = cv2.getTrackbarPos("U-S", "Trackbars")
-        u_v = cv2.getTrackbarPos("U-V", "Trackbars")
+        # Display processed frame if available
+        if not processed_queue.empty():
+            processed_data = processed_queue.get()
+            cv2.imshow('Frame', processed_data['frame'])
+            cv2.imshow('Mask', processed_data['mask'])
         
-        # Define HSV range for mask
-        lower = np.array([l_h, l_s, l_v])
-        upper = np.array([u_h, u_s, u_v])
-        mask = cv2.inRange(imgHSV, lower, upper)
-        
-        # Apply dilation and erosion based on contour size
-        kernel_small = np.ones((3, 3))
-        kernel_large = np.ones((5, 5))
-        imgDial = cv2.dilate(mask, kernel_large, iterations=2)
-        imgErode = cv2.erode(imgDial, kernel_small, iterations=1)
-        
-        # Detect contours
-        contours, _ = cv2.findContours(imgErode, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if area > 1500:
-                perimeter = cv2.arcLength(cnt, True)
-                shape = cv2.approxPolyDP(cnt, 0.04 * perimeter, True)
-                corners = len(shape)
-                
-                # If the shape has 7 corners, it may be a heptagon
-                if corners == 7:
-                    x, y, w, h = cv2.boundingRect(cnt)
-                    cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                    cv2.drawContours(frame, [shape], -1, (0, 255, 0), 2, lineType=cv2.LINE_AA)
-        
-        # Display the frame
-        cv2.imshow('Frame', frame)
-        
-        # Press 'q' to exit the loop
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        # Handle window events and check for exit
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
             break
 
-    # Release resources if loop exits
+finally:
+    # Cleanup
+    running = False
+    process_thread.join()
     cap.release()
     cv2.destroyAllWindows()
-
-# Start processing in a thread
-thread = threading.Thread(target=process_frame)
-thread.start()
-
-# Wait for the processing to complete
-thread.join()

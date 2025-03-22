@@ -109,18 +109,27 @@ camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 ```
 
-5. Run the application:
+5. Open your browser and navigate to `http://localhost:5000`
+
+## Docker Support
+
+### Building the Docker Image
+
+1. Build the image:
 ```bash
-python app.py
+docker build -t arrow-detection .
 ```
 
-6. Open your web browser and navigate to:
-```
-http://127.0.0.1:5000
+2. Run the container:
+```bash
+docker run -d \
+  --name arrow-detection \
+  --device=/dev/video0:/dev/video0 \
+  -p 5000:5000 \
+  arrow-detection
 ```
 
-## Project Structure
-
+### Structure
 ```
 ArrowDetection/
 ├── app.py              # Main Flask application
@@ -179,14 +188,5 @@ Enable debug mode for detailed logs:
 app.run(debug=True)
 ```
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## License
-
+## Support
 This project is licensed under the MIT License - see the LICENSE file for details.

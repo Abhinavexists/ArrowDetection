@@ -14,6 +14,57 @@ camera = None
 camera_lock = Lock()
 running = True
 
+# Get camera source from environment variable or use default
+CAMERA_SOURCE = os.getenv('CAMERA_SOURCE', '0')
+
+def init_camera():
+    """Initialize camera with fallback options"""
+    try:
+        # Try to open the camera
+        camera = cv2.VideoCapture(int(CAMERA_SOURCE))
+        if not camera.isOpened():
+            raise Exception("Camera not available")
+        return camera
+    except Exception as e:
+        print(f"Error initializing camera: {e}")
+        # Try to use a test video file if available
+        if os.path.exists('test_video.mp4'):
+            return cv2.VideoCapture('test_video.mp4')
+        # If no test video, create a dummy camera that generates a test pattern
+        return create_dummy_camera()
+
+def create_dummy_camera():
+    """Create a dummy camera that generates a test pattern"""
+    class DummyCamera:
+        def __init__(self):
+            self.frame_count = 0
+            self.width = 640
+            self.height = 480
+
+        def isOpened(self):
+            return True
+
+        def read(self):
+            # Create a test pattern
+            frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+            # Draw a moving arrow
+            center_x = int(self.width/2 + 50 * np.sin(self.frame_count/30))
+            center_y = int(self.height/2 + 50 * np.cos(self.frame_count/30))
+            cv2.arrowedLine(frame, 
+                          (center_x-50, center_y), 
+                          (center_x+50, center_y), 
+                          (0, 0, 255), 5)
+            self.frame_count += 1
+            return True, frame
+
+        def release(self):
+            pass
+
+    return DummyCamera()
+
+# Initialize camera
+camera = init_camera()
+
 class VideoCamera:
     def __init__(self):
         self.video = cv2.VideoCapture(0)

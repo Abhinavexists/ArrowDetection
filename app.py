@@ -5,6 +5,7 @@ import numpy as np
 import base64
 from threading import Thread, Lock
 import time
+import os
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins='*')

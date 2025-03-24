@@ -1,5 +1,5 @@
 numpy<2.0.0
-opencv-python==4.8.0.76
+opencv-python==4.8.1.78
 Flask==2.3.3
 gunicorn==21.2.0
 Flask-SocketIO==5.3.6

@@ -1,4 +1,4 @@
-# Arrow Detection System
+# ArrowSense - Arrow Detection System
 
 A real-time arrow detection and tracking system with a modern web interface. This project uses computer vision techniques to detect and analyze arrows in video streams.
 
